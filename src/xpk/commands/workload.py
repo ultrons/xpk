@@ -133,6 +133,23 @@ def _build_poc_labels(args) -> str:
     lines.append(f'declared-duration-minutes: "{args.declared_duration_minutes}"')
   # indent to match template (4 spaces)
   return ('\n    ').join(lines)
+
+
+def _build_poc_pod_template_labels(args) -> str:
+  """Return YAML label lines for PoC labels that must appear in pod template.
+
+  Kueue does NOT propagate arbitrary JobSet metadata labels to the Workload
+  object, so the time-limit controller reads declared-duration-minutes from
+  spec.podSets[*].template.metadata.labels instead.
+  """
+  if not getattr(args, 'team', None):
+    return ''
+  if getattr(args, 'declared_duration_minutes', None) is None:
+    return ''
+  # indent to match pod template labels (16 spaces)
+  return f'declared-duration-minutes: "{args.declared_duration_minutes}"'
+
+
 """Maximum safe workload name length to avoid exceeding GCE's 63-character limit.
 
 Kueue/Jobset prefixes and suffixes consume characters: 8 (`default-`), 7 (`jobset-`),
@@ -168,6 +185,7 @@ spec:
             metadata:
               labels:
                 xpk.google.com/workload: {args.workload}
+                {poc_pod_template_labels}
               annotations:
                 {storage_annotations}
                 {sub_slicing_annotations}
@@ -801,6 +819,7 @@ def workload_create(args) -> None:
         local_queue_name=poc_local_queue,
         namespace_field=f'namespace: {poc_namespace}' if poc_namespace else '',
         poc_labels=_build_poc_labels(args),
+        poc_pod_template_labels=_build_poc_pod_template_labels(args),
         autoprovisioning_args=autoprovisioning_args,
         volumes=get_volumes(args, workload_system),
         storage_annotations=('\n' + (' ' * 16)).join(
