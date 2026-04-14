@@ -665,7 +665,7 @@ def add_shared_workload_create_optional_arguments(args_parsers):
         '--team',
         type=str,
         default=None,
-        choices=['ml-perf', 'nightly-regression', 'gsc', 'dev', 'scale-test'],
+        choices=['ml-perf', 'nightly-regression', 'gsc', 'dev', 'reactant', 'scale-test'],
         help=(
             'PoC quota system: team name. When set, automatically routes the job'
             ' to the correct namespace (poc-<team>), LocalQueue (lq), and'

@@ -55,6 +55,7 @@ POC_TEAM_CONFIG = {
     "nightly-regression": ("poc-nightly",            "lq", "poc-nightly-priority"),
     "gsc":                ("poc-gsc",                "lq", "poc-gsc-priority"),
     "dev":                ("poc-dev",                "lq", "poc-dev-priority"),
+    "reactant":           ("poc-reactant",           "lq", "poc-reactant-priority"),
     "scale-test":         ("poc-scale-test",         "lq", "poc-scale-test-priority"),
 }
 
@@ -67,6 +68,7 @@ POC_TEAM_MAX_WORKLOAD_NAME = {
     "nightly-regression": 16,  # namespace=poc-nightly (11):            27-11=16
     "gsc":                20,  # namespace=poc-gsc (7):                 27-7=20
     "dev":                20,  # namespace=poc-dev (7):                 27-7=20
+    "reactant":           15,  # namespace=poc-reactant (12):           27-12=15
     "scale-test":         13,  # namespace=poc-scale-test (14):         27-14=13
 }
 SUB_SLICE_TOPOLOGY_NAME = "sub-slice-topology"
