@@ -1092,14 +1092,39 @@ def workload_status(args) -> None:
     args: user provided arguments (--cluster, --team, --workload).
   """
   import json as _json
-  import subprocess as _subprocess
   from datetime import datetime, timezone
+
+  import subprocess as _subprocess
 
   if should_validate_dependencies(args):
     validate_dependencies_list(
         args, [SystemDependency.KUBECTL, SystemDependency.GCLOUD]
     )
-  add_zone_and_project(args)
+
+  # Fill project from gcloud config if not provided.
+  if not getattr(args, 'project', None):
+    r = _subprocess.run(
+        ['gcloud', 'config', 'get', 'project'], capture_output=True, text=True
+    )
+    args.project = r.stdout.strip().splitlines()[-1] if r.returncode == 0 else ''
+  if not args.project:
+    xpk_print('ERROR: --project not set and could not be determined from gcloud config.')
+    xpk_exit(1)
+
+  # Look up the cluster location directly — avoids requiring compute/zone in
+  # gcloud config (which get_cluster_credentials needs but users often lack).
+  if not getattr(args, 'zone', None):
+    rc, loc = run_command_for_value(
+        f'gcloud container clusters list --project={args.project}'
+        f' --filter=name={args.cluster} --format="value(location)"',
+        task='Find cluster location',
+        quiet=True,
+    )
+    if rc != 0 or not loc.strip():
+      xpk_print(f'ERROR: Could not find cluster "{args.cluster}" in project {args.project}.')
+      xpk_exit(1)
+    args.zone = loc.strip()
+
   get_cluster_credentials(args)
 
   team = args.team
