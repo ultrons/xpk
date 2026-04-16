@@ -61,15 +61,15 @@ POC_TEAM_CONFIG = {
 
 # Max safe JobSet name length per PoC namespace (= xpk --workload argument).
 # Kueue auto-names the Workload as "jobset-{name}-{hash5}" (13+len(name) chars).
-# The slice controller shortens the Slice name to "{ns}-{workload}-s-{hash5}".
-# Full constraint: len(ns)+1+(13+len(name))+8 <= 49  =>  len(name) <= 27-len(ns)
+# Slice controller names slices as "{ns}-jobset-{name}-{hash5}-slice-job-{i}".
+# Full constraint: len(ns)+1+7+len(name)+1+5+12 <= 49  =>  len(name) <= 23-len(ns)
 POC_TEAM_MAX_WORKLOAD_NAME = {
-    "ml-perf":            16,  # namespace=poc-ml-perf (11):            27-11=16
-    "nightly-regression": 16,  # namespace=poc-nightly (11):            27-11=16
-    "gsc":                20,  # namespace=poc-gsc (7):                 27-7=20
-    "dev":                20,  # namespace=poc-dev (7):                 27-7=20
-    "reactant":           15,  # namespace=poc-reactant (12):           27-12=15
-    "scale-test":         13,  # namespace=poc-scale-test (14):         27-14=13
+    "ml-perf":            12,  # namespace=poc-ml-perf (11):            23-11=12
+    "nightly-regression": 12,  # namespace=poc-nightly (11):            23-11=12
+    "gsc":                16,  # namespace=poc-gsc (7):                 23-7=16
+    "dev":                16,  # namespace=poc-dev (7):                 23-7=16
+    "reactant":           11,  # namespace=poc-reactant (12):           23-12=11
+    "scale-test":          9,  # namespace=poc-scale-test (14):         23-14=9
 }
 SUB_SLICE_TOPOLOGY_NAME = "sub-slice-topology"
 SUPER_SLICE_TOPOLOGY_NAME = "super-slice-topology"
