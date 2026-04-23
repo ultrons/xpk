@@ -16,6 +16,8 @@ limitations under the License.
 
 import argparse
 from argparse import ArgumentParser
+
+from ..core import local_cache
 from ..commands.workload import (
     workload_create,
     workload_create_pathways,
@@ -26,6 +28,35 @@ from ..commands.workload import (
 from ..core.docker_image import DEFAULT_DOCKER_IMAGE, DEFAULT_SCRIPT_DIR
 from .common import add_shared_arguments, add_tpu_type_argument, add_tpu_and_device_type_arguments
 from .validators import directory_path_type, name_type
+
+
+def _cached_field_completer(field: str):
+  """Build an argcomplete completer that reads the PoC cache for `field`
+  ('teams' or 'valueClasses'). Prefers the cache entry for the kubectl
+  context corresponding to parsed_args.cluster; falls back to the union of
+  all cached contexts so completion still helps on an unfamiliar cluster."""
+  def _complete(prefix, parsed_args, **_kwargs):
+    cluster = getattr(parsed_args, 'cluster', None)
+    candidates = set()
+    if cluster:
+      for c in local_cache.all_contexts():
+        # kubectl contexts for GKE end with the cluster name
+        if c.endswith('_' + cluster) or c == cluster:
+          payload = local_cache.read(c) or {}
+          candidates.update(payload.get(field) or [])
+    if not candidates:
+      for c in local_cache.all_contexts():
+        payload = local_cache.read(c) or {}
+        candidates.update(payload.get(field) or [])
+    return sorted(v for v in candidates if v.startswith(prefix or ''))
+  return _complete
+
+
+def _cluster_completer(prefix, parsed_args, **_kwargs):
+  """Tab-complete --cluster from GKE contexts in the user's kubeconfig."""
+  del parsed_args
+  return [c for c in local_cache.gke_contexts_from_kubeconfig()
+          if c.startswith(prefix or '')]
 
 
 def set_workload_parsers(workload_parser: ArgumentParser):
@@ -434,7 +465,7 @@ def set_workload_delete_parser(workload_delete_parser: ArgumentParser):
       default=None,
       help='The name of the cluster to delete the job on.',
       required=True,
-  )
+  ).completer = _cluster_completer
   ### "workload delete" Optional arguments
   workload_delete_parser_optional_arguments.add_argument(
       '--workload',
@@ -489,7 +520,7 @@ def set_workload_list_parser(workload_list_parser: ArgumentParser):
       default=None,
       help='The name of the cluster to list jobs on.',
       required=True,
-  )
+  ).completer = _cluster_completer
 
   workload_list_parser.add_argument(
       '--filter-by-status',
@@ -560,7 +591,7 @@ def set_workload_status_parser(workload_status_parser: ArgumentParser):
       default=None,
       required=True,
       help='The name of the PoC cluster.',
-  )
+  ).completer = _cluster_completer
   workload_status_parser.add_argument(
       '--team',
       type=str,
@@ -569,7 +600,7 @@ def set_workload_status_parser(workload_status_parser: ArgumentParser):
           'Your PoC team name. The set of valid teams is discovered at'
           ' runtime from the cluster\'s poc-team-config ConfigMap.'
       ),
-  )
+  ).completer = _cached_field_completer('teams')
   workload_status_parser.add_argument(
       '--workload',
       type=str,
@@ -603,7 +634,7 @@ def add_shared_workload_create_required_arguments(args_parsers):
         default=None,
         help='The name of the cluster to run the job on.',
         required=True,
-    )
+    ).completer = _cluster_completer
 
 
 def add_shared_workload_create_optional_arguments(args_parsers):
@@ -710,7 +741,7 @@ def add_shared_workload_create_optional_arguments(args_parsers):
             ' --priority. Valid teams are discovered at runtime from the'
             ' cluster\'s poc-team-config ConfigMap.'
         ),
-    )
+    ).completer = _cached_field_completer('teams')
     custom_parser.add_argument(
         '--value-class',
         type=str,
@@ -720,7 +751,7 @@ def add_shared_workload_create_optional_arguments(args_parsers):
             ' Valid classes are discovered at runtime from the cluster\'s'
             ' poc-team-config ConfigMap.'
         ),
-    )
+    ).completer = _cached_field_completer('valueClasses')
     custom_parser.add_argument(
         '--declared-duration-minutes',
         type=int,

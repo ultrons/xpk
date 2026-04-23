@@ -24,8 +24,10 @@ Callers should have run `get_cluster_credentials(args)` (or otherwise set up
 kubectl) before calling into this module.
 """
 
+import difflib
 import json
 
+from . import local_cache
 from .commands import run_command_for_value
 
 CONFIG_CM_NAMESPACE = "kueue-system"
@@ -34,7 +36,12 @@ CONFIG_CM_KEY       = "config.json"
 
 
 def fetch_poc_config() -> dict | None:
-  """Return the parsed ConfigMap payload, or None if unavailable/malformed."""
+  """Return the parsed ConfigMap payload, or None if unavailable/malformed.
+
+  On success, refreshes ~/.xpk/poc-cache/<context>.json as a side effect so
+  that argcomplete and did-you-mean suggestions work even when the cluster
+  isn't reachable.
+  """
   cmd = f'kubectl get configmap -n {CONFIG_CM_NAMESPACE} {CONFIG_CM_NAME} -o json'
   rc, out = run_command_for_value(cmd, task=cmd, quiet=True)
   if rc != 0 or not out:
@@ -47,9 +54,18 @@ def fetch_poc_config() -> dict | None:
   if not raw:
     return None
   try:
-    return json.loads(raw)
+    cfg = json.loads(raw)
   except json.JSONDecodeError:
     return None
+  ctx = local_cache.current_context()
+  if ctx:
+    local_cache.write(ctx, cfg)
+  return cfg
+
+
+def suggest(user_input: str, candidates: list[str], limit: int = 3) -> list[str]:
+  """Return up to `limit` closest matches for an unknown value."""
+  return difflib.get_close_matches(user_input, candidates, n=limit, cutoff=0.5)
 
 
 def available_teams(cfg: dict) -> list[str]:

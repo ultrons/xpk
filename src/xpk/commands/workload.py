@@ -42,6 +42,7 @@ from ..core.poc_discovery import (
     fetch_poc_config,
     max_k8s_workload_name_len,
     resolve_team,
+    suggest,
 )
 from ..core.docker_resources import get_volumes, parse_env_config
 from ..core.gcloud_context import add_zone_and_project
@@ -133,17 +134,22 @@ def _load_poc_cfg(args) -> dict | None:
     )
     xpk_exit(1)
   if args.team not in (cfg.get('teams') or {}):
+    teams = available_teams(cfg)
+    hints = suggest(args.team, teams)
+    hint_line = f' Did you mean: {", ".join(hints)}?' if hints else ''
     xpk_print(
-        f'ERROR: --team={args.team!r} not found on this cluster.'
-        f' Available teams: {", ".join(available_teams(cfg)) or "<none>"}'
+        f'ERROR: --team={args.team!r} not found on this cluster.{hint_line}'
+        f' Available teams: {", ".join(teams) or "<none>"}'
     )
     xpk_exit(1)
   if getattr(args, 'value_class', None):
     vcs = available_value_classes(cfg)
     if vcs and args.value_class not in vcs:
+      hints = suggest(args.value_class, vcs)
+      hint_line = f' Did you mean: {", ".join(hints)}?' if hints else ''
       xpk_print(
           f'ERROR: --value-class={args.value_class!r} not valid on this cluster.'
-          f' Available: {", ".join(vcs)}'
+          f'{hint_line} Available: {", ".join(vcs)}'
       )
       xpk_exit(1)
   args._poc_cfg = cfg
