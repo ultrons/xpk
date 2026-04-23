@@ -33,7 +33,16 @@ from ..core.docker_container import (
     get_main_container_docker_image,
     get_user_workload_container,
 )
-from ..core.kueue_manager import LOCAL_QUEUE_NAME, POC_TEAM_CONFIG, POC_TEAM_MAX_WORKLOAD_NAME, derive_k8s_workload_name
+from ..core.kueue_manager import LOCAL_QUEUE_NAME, derive_k8s_workload_name
+from ..core.poc_discovery import (
+    CONFIG_CM_NAME,
+    CONFIG_CM_NAMESPACE,
+    available_teams,
+    available_value_classes,
+    fetch_poc_config,
+    max_k8s_workload_name_len,
+    resolve_team,
+)
 from ..core.docker_resources import get_volumes, parse_env_config
 from ..core.gcloud_context import add_zone_and_project
 from ..core.monitoring import get_gke_outlier_dashboard
@@ -106,12 +115,47 @@ _PATHWAYS_WORKLOAD_TEMPLATE = 'pathways_workload_create.yaml.j2'
 _SUPER_SLICING_WORKLOAD_NAME_LIMIT = 28
 
 
+def _load_poc_cfg(args) -> dict | None:
+  """Fetch the PoC ConfigMap once per invocation and cache on args. Returns
+  None if --team is unset (so upstream, non-PoC behavior is preserved)."""
+  if not getattr(args, 'team', None):
+    return None
+  cached = getattr(args, '_poc_cfg', None)
+  if cached is not None:
+    return cached
+  cfg = fetch_poc_config()
+  if cfg is None:
+    xpk_print(
+        f'ERROR: --team={args.team!r} requires the PoC ConfigMap'
+        f' "{CONFIG_CM_NAMESPACE}/{CONFIG_CM_NAME}" on the target cluster.'
+        ' Deploy cluster-management/poc/chart first, or drop --team to bypass'
+        ' PoC routing.'
+    )
+    xpk_exit(1)
+  if args.team not in (cfg.get('teams') or {}):
+    xpk_print(
+        f'ERROR: --team={args.team!r} not found on this cluster.'
+        f' Available teams: {", ".join(available_teams(cfg)) or "<none>"}'
+    )
+    xpk_exit(1)
+  if getattr(args, 'value_class', None):
+    vcs = available_value_classes(cfg)
+    if vcs and args.value_class not in vcs:
+      xpk_print(
+          f'ERROR: --value-class={args.value_class!r} not valid on this cluster.'
+          f' Available: {", ".join(vcs)}'
+      )
+      xpk_exit(1)
+  args._poc_cfg = cfg
+  return cfg
+
+
 def _resolve_poc_team(args) -> tuple[str, str, str]:
   """Return (namespace, local_queue_name, priority_class) for --team, or defaults."""
-  if not getattr(args, 'team', None):
+  cfg = _load_poc_cfg(args)
+  if cfg is None:
     return ('', LOCAL_QUEUE_NAME, args.priority)
-  namespace, lq, priority_class = POC_TEAM_CONFIG[args.team]
-  return (namespace, lq, priority_class)
+  return resolve_team(cfg, args.team)
 
 
 def _build_poc_labels(args) -> str:
@@ -797,7 +841,8 @@ def workload_create(args) -> None:
     poc_namespace, poc_local_queue, poc_priority = _resolve_poc_team(args)
     # Derive a short K8s-safe JobSet name for PoC teams; use display name as-is otherwise.
     if poc_namespace:
-      k8s_name = derive_k8s_workload_name(args.workload, args.team)
+      max_len = max_k8s_workload_name_len(args._poc_cfg, poc_namespace)
+      k8s_name = derive_k8s_workload_name(args.workload, max_len)
       args.priority = poc_priority
       xpk_print(
           f'PoC workload "{args.workload}" → K8s JobSet name: "{k8s_name}"'
@@ -1135,7 +1180,7 @@ def workload_status(args) -> None:
   get_cluster_credentials(args)
 
   team = args.team
-  namespace, _lq, _pc = POC_TEAM_CONFIG[team]
+  namespace, _lq, _pc = _resolve_poc_team(args)
   cq_name = namespace  # ClusterQueue name matches namespace name
 
   # ------------------------------------------------------------------

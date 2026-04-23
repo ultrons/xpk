@@ -565,8 +565,10 @@ def set_workload_status_parser(workload_status_parser: ArgumentParser):
       '--team',
       type=str,
       required=True,
-      choices=['ml-perf', 'nightly-regression', 'gsc', 'dev', 'reactant', 'scale-test'],
-      help='Your PoC team name.',
+      help=(
+          'Your PoC team name. The set of valid teams is discovered at'
+          ' runtime from the cluster\'s poc-team-config ConfigMap.'
+      ),
   )
   workload_status_parser.add_argument(
       '--workload',
@@ -702,19 +704,22 @@ def add_shared_workload_create_optional_arguments(args_parsers):
         '--team',
         type=str,
         default=None,
-        choices=['ml-perf', 'nightly-regression', 'gsc', 'dev', 'reactant', 'scale-test'],
         help=(
             'PoC quota system: team name. When set, automatically routes the job'
-            ' to the correct namespace (poc-<team>), LocalQueue (lq), and'
-            ' PriorityClass. Overrides --priority.'
+            ' to the correct namespace, LocalQueue, and PriorityClass. Overrides'
+            ' --priority. Valid teams are discovered at runtime from the'
+            ' cluster\'s poc-team-config ConfigMap.'
         ),
     )
     custom_parser.add_argument(
         '--value-class',
         type=str,
         default=None,
-        choices=['regression', 'benchmark', 'scale-test', 'development'],
-        help='PoC quota system: job type label for audit and priority ordering.',
+        help=(
+            'PoC quota system: job type label for audit and priority ordering.'
+            ' Valid classes are discovered at runtime from the cluster\'s'
+            ' poc-team-config ConfigMap.'
+        ),
     )
     custom_parser.add_argument(
         '--declared-duration-minutes',

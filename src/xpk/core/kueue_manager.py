@@ -49,37 +49,15 @@ WAIT_FOR_KUEUE_TIMEOUT = "10m"
 CLUSTER_QUEUE_NAME = "cluster-queue"
 LOCAL_QUEUE_NAME = "multislice-queue"
 
-# PoC quota system: team → (namespace, local-queue, priority-class)
-# When --team is specified, these override the defaults above.
-POC_TEAM_CONFIG = {
-    "ml-perf":            ("poc-ml-perf",            "lq", "poc-ml-perf-priority"),
-    "nightly-regression": ("poc-nightly",            "lq", "poc-nightly-priority"),
-    "gsc":                ("poc-gsc",                "lq", "poc-gsc-priority"),
-    "dev":                ("poc-dev",                "lq", "poc-dev-priority"),
-    "reactant":           ("poc-reactant",           "lq", "poc-reactant-priority"),
-    "scale-test":         ("poc-scale-test",         "lq", "poc-scale-test-priority"),
-}
-
-# Max safe JobSet name length per PoC namespace (= xpk --workload argument).
-# Kueue auto-names the Workload as "jobset-{name}-{hash5}" (13+len(name) chars).
-# Slice controller names slices as "{ns}-jobset-{name}-{hash5}-slice-job-{i}".
-# Full constraint: len(ns)+1+7+len(name)+1+5+12 <= 49  =>  len(name) <= 23-len(ns)
-POC_TEAM_MAX_WORKLOAD_NAME = {
-    "ml-perf":            12,  # namespace=poc-ml-perf (11):            23-11=12
-    "nightly-regression": 12,  # namespace=poc-nightly (11):            23-11=12
-    "gsc":                16,  # namespace=poc-gsc (7):                 23-7=16
-    "dev":                16,  # namespace=poc-dev (7):                 23-7=16
-    "reactant":           11,  # namespace=poc-reactant (12):           23-12=11
-    "scale-test":          9,  # namespace=poc-scale-test (14):         23-14=9
-}
-
-
-def derive_k8s_workload_name(display_name: str, team: str) -> str:
+def derive_k8s_workload_name(display_name: str, max_len: int) -> str:
   """Derive a short K8s-safe JobSet name from a user-provided display name.
 
   The superslice admission controller requires slice names ≤ 49 chars:
     {namespace}-jobset-{k8s_name}-{kueue_hash5}-slice-job-{i}
-  So k8s_name must be ≤ POC_TEAM_MAX_WORKLOAD_NAME[team] chars.
+  So k8s_name must be ≤ max_len chars. max_len comes from the cluster's
+  poc-team-config ConfigMap (see poc_discovery.max_k8s_workload_name_len),
+  computed from len(namespace) and the super-slice admission controller's
+  char-limit / fixed-overhead constants.
 
   Format: {ldap_prefix}-{hex4}
   - ldap_prefix: display_name up to the first '-', truncated to fit
@@ -91,7 +69,6 @@ def derive_k8s_workload_name(display_name: str, team: str) -> str:
   Users avoid collisions by including a unique suffix in their display name
   (e.g. 'amandaliang-run42'), which propagates into the hex4.
   """
-  max_len = POC_TEAM_MAX_WORKLOAD_NAME[team]
   # Reserve 5 chars for '-' + 4 hex digits
   max_prefix = max_len - 5
   ldap = display_name.split('-')[0]
